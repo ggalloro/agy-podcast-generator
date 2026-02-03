@@ -1,5 +1,6 @@
 ---
-trigger: always_on
+name: Google GenAI JS SDK
+description: Create Javascript and Typescript code using the Google GenAI SDK (@google/genai)
 ---
 
 # Gemini API Coding Guidelines (JavaScript/TypeScript)
@@ -177,7 +178,7 @@ async function run() {
     // Generate
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-         contents: createUserContent([
+        contents: createUserContent([
           createPartFromUri(myFile.uri, myFile.mimeType),
           "What happens in this video?"
         ])
@@ -421,3 +422,397 @@ export enum Type {
   /**
    *   Not specified, should not be used.
    */
+  TYPE_UNSPECIFIED = 'TYPE_UNSPECIFIED',
+  /**
+   *   OpenAPI string type
+   */
+  STRING = 'STRING',
+  /**
+   *   OpenAPI number type
+   */
+  NUMBER = 'NUMBER',
+  /**
+   *   OpenAPI integer type
+   */
+  INTEGER = 'INTEGER',
+  /**
+   *   OpenAPI boolean type
+   */
+  BOOLEAN = 'BOOLEAN',
+  /**
+   *   OpenAPI array type
+   */
+  ARRAY = 'ARRAY',
+  /**
+   *   OpenAPI object type
+   */
+  OBJECT = 'OBJECT',
+  /**
+   *   Null type
+   */
+  NULL = 'NULL',
+}
+```
+
+`Type.OBJECT` cannot be empty; it must contain other properties.
+
+```javascript
+import { GoogleGenAI, Type } from "@google/genai";
+
+const ai = new GoogleGenAI({});
+
+async function main() {
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: "List a few popular cookie recipes, and include the amounts of ingredients.",
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              recipeName: {
+                type: Type.STRING,
+                description: 'The name of the recipe.',
+              },
+              ingredients: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.STRING,
+                },
+                description: 'The ingredients for the recipe.',
+              },
+            },
+            propertyOrdering: ["recipeName", "ingredients"],
+          },
+        },
+    },
+  });
+
+  // response.text is guaranteed to be valid JSON matching the schema
+  console.log(response.text);
+  const recipe = JSON.parse(response.text);
+}
+
+main();
+```
+
+The `response.text` might look like this:
+
+```json
+[
+  {
+    "recipeName": "Chocolate Chip Cookies",
+    "ingredients": [
+      "1 cup (2 sticks) unsalted butter, softened",
+      "3/4 cup granulated sugar",
+      "3/4 cup packed brown sugar",
+      "1 teaspoon vanilla extract",
+      "2 large eggs",
+      "2 1/4 cups all-purpose flour",
+      "1 teaspoon baking soda",
+      "1 teaspoon salt",
+      "2 cups chocolate chips"
+    ]
+  },
+  ...
+]
+```
+
+### Function Calling (Tools)
+
+You can provide the model with tools (functions) it can use to bring in external
+information to answer a question or act on a request outside the model.
+
+```javascript
+import {GoogleGenAI, FunctionDeclaration, Type} from '@google/genai';
+const ai = new GoogleGenAI({});
+
+async function run() {
+    const controlLightDeclaration = {
+        name: 'controlLight',
+        parameters: {
+          type: Type.OBJECT,
+          description: 'Set brightness and color temperature of a light.',
+          properties: {
+            brightness: { type: Type.NUMBER, description: 'Light level from 0 to 100.' },
+            colorTemperature: { type: Type.STRING, description: '`daylight`, `cool`, or `warm`.'},
+          },
+          required: ['brightness', 'colorTemperature'],
+        },
+    };
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: 'Dim the lights so the room feels cozy and warm.',
+        config: {
+            tools: [{ functionDeclarations: [controlLightDeclaration] }]
+        }
+    });
+
+    if (response.functionCalls) {
+        console.log('Function calls requested by the model:');
+        console.log(response.functionCalls);
+        // In a real app, you would execute the function and send the result back.
+    } else {
+        console.log(response.text);
+    }
+}
+run();
+```
+
+### Grounding (Google Search)
+
+Connect the model to real-time web data.
+
+```javascript
+import { GoogleGenAI } from "@google/genai";
+
+const ai = new GoogleGenAI({});
+
+async function run() {
+    const response = await ai.models.generateContent({
+       model: "gemini-2.5-flash",
+       contents: "What was the score of the latest Olympique Lyonais game?",
+       config: {
+         tools: [{ googleSearch: {} }],
+       },
+    });
+
+    console.log(response.text);
+
+    // Inspect grounding metadata
+    const metadata = response.candidates?.[0]?.groundingMetadata;
+    if (metadata) {
+        console.log("Search Queries:", metadata.webSearchQueries);
+        const urls = metadata.groundingChunks?.map(chunk => chunk.web?.title) || [];
+        console.log("Sources:", urls);
+    }
+}
+run();
+```
+
+## Media Generation
+
+### Generate Images
+
+Here's how to generate images using the Nano Banana models. Start with the
+Gemini 2.5 Flash Image (Nano Banana) model as it should cover most use-cases.
+
+```javascript
+import { GoogleGenAI } from "@google/genai";
+import * as fs from 'fs';
+
+const ai = new GoogleGenAI({});
+
+async function main() {
+  const prompt = "Create a picture of a nano banana dish in a fancy restaurant with a Gemini theme";
+
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash-image",
+    contents: prompt,
+  });
+
+  for (const part of response.candidates[0].content.parts) {
+    if (part.text) {
+      console.log(part.text);
+    } else if (part.inlineData) {
+      const base64ImageBytes: string = part.inlineData.data;
+      const imageUrl = `data:image/png;base64,${base64ImageBytes}`;
+    }
+  }
+}
+
+main();
+```
+
+Upgrade to the Gemini 3 Pro image (Nano Banana Pro) model if the user requests
+high-resolution images or needs real-time information using the Google Search
+tool.
+
+```javascript
+import { GoogleGenAI } from "@google/genai";
+import * as fs from 'fs';
+
+const ai = new GoogleGenAI({});
+
+async function main() {
+  const prompt = 'Visualize the current weather forecast for the next 5 days in San Francisco as a clean, modern weather chart. Add a visual on what I should wear each day';
+  const aspectRatio = '16:9'; // "1:1","2:3","3:2","3:4","4:3","4:5","5:4","9:16","16:9","21:9"
+  const resolution = '2K';  // "1K", "2K", "4K"
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-pro-image-preview',
+    contents: prompt,
+    config: {
+      imageConfig: {
+        aspectRatio: aspectRatio,
+        imageSize: resolution,
+      },
+      tools: [{ googleSearch: {} }]
+    },
+  });
+
+  for (const part of response.candidates[0].content.parts) {
+    if (part.text) {
+      console.log(part.text);
+    } else if (part.inlineData) {
+      const base64ImageBytes: string = part.inlineData.data;
+      const imageUrl = `data:image/png;base64,${base64ImageBytes}`;
+    }
+  }
+}
+
+main();
+```
+
+### Edit Images
+
+Editing images is better done using the Gemini native image generation model,
+and it is recommended to use chat mode. Configs are not supported in this model
+(except modality).
+
+```javascript
+import { GoogleGenAI } from '@google/genai';
+import * as fs from 'fs';
+
+const ai = new GoogleGenAI({});
+
+async function main() {
+  const imageBuffer = fs.readFileSync('path/to/image.png');
+  const imageBase64 = imageBuffer.toString('base64');
+
+  // Create the chat
+  const chat = ai.chats.create({ model: 'gemini-2.5-flash-image' });
+
+  // Send the image and ask for it to be edited
+  const response = await chat.sendMessage({
+      content: [
+          { inlineData: { mimeType: 'image/png', data: imageBase64 } },
+          "Make it a bananas foster."
+      ]
+  });
+
+  // Get the generated image(s)
+  for (const part of response.candidates[0].content.parts) {
+    if (part.inlineData) {
+      const base64ImageBytes: string = part.inlineData.data;
+      const imageUrl = `data:image/png;base64,${base64ImageBytes}`;
+    }
+  }
+}
+
+main();
+```
+
+### Video Generation (Veo)
+
+Use the Veo models for video generation. Usage of Veo can be costly,
+so after generating code for it, give user a heads up to check pricing for Veo.
+
+```javascript
+import { GoogleGenAI } from "@google/genai";
+import { createWriteStream } from "fs";
+import { Readable } from "stream";
+
+const ai = new GoogleGenAI({});
+
+async function main() {
+  // Video generation is an async operation
+  let operation = await ai.models.generateVideos({
+    model: "veo-3.0-fast-generate-001",
+    prompt: "Panning wide shot of a calico kitten sleeping in the sunshine",
+    config: {
+      personGeneration: "dont_allow",
+      aspectRatio: "16:9",
+    },
+  });
+
+  console.log("Generating video...");
+
+  // Poll for completion
+  while (!operation.done) {
+    await new Promise((resolve) => setTimeout(resolve, 10000)); // Sleep 10s
+    operation = await ai.operations.getVideosOperation({
+      operation: operation,
+    });
+  }
+
+  // Download results
+  if (operation.response?.generatedVideos) {
+    operation.response.generatedVideos.forEach(async (video, n) => {
+        const videoUrl = `${video.video.uri}&key=${process.env.GEMINI_API_KEY}`;
+        const resp = await fetch(videoUrl);
+        const writer = createWriteStream(`video${n}.mp4`);
+        Readable.fromWeb(resp.body).pipe(writer);
+        console.log(`Saved video${n}.mp4`);
+    });
+  }
+}
+
+main();
+```
+
+### Content and Part Hierarchy
+
+While the simpler API call is often sufficient, you may run into scenarios where
+you need to work directly with the underlying `Content` and `Part` objects for
+more explicit control. These are the fundamental building blocks of the
+`generateContent` API.
+
+For instance, the following simple API call:
+
+```javascript
+import { GoogleGenAI } from '@google/genai';
+const ai = new GoogleGenAI({});
+
+async function run() {
+    const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: "How does AI work?",
+    });
+    console.log(response.text);
+}
+run();
+```
+
+is effectively a shorthand for this more explicit structure:
+
+```javascript
+import { GoogleGenAI } from '@google/genai';
+const ai = new GoogleGenAI({});
+
+async function run() {
+    const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [
+            {
+                role: "user",
+                parts: [{ text: "How does AI work?" }]
+            },
+        ],
+    });
+    console.log(response.text);
+}
+run();
+```
+
+## API Errors
+
+`ApiError` from `@google/genai` extends from EcmaScript `Error` and has
+`message`, `name` fields in addition to `status` (HTTP Code).
+
+## Other APIs
+
+The list of APIs and capabilities above are not comprehensive. If users ask you
+to generate code for a capability not provided above, refer them to
+[https://googleapis.github.io/js-genai/](https://googleapis.github.io/js-genai/).
+
+## Useful Links
+
+-   Documentation: ai.google.dev/gemini-api/docs
+-   API Keys and Authentication: ai.google.dev/gemini-api/docs/api-key
+-   Models: ai.google.dev/models
+-   API Pricing: ai.google.dev/pricing
+-   Rate Limits: ai.google.dev/rate-limits
