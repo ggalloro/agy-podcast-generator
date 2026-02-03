@@ -1,6 +1,9 @@
 # Main GEMINI.md file
 
-For guide on interacting with Gemini API follow the instructions in:
-@gemini-styleguide.md
+## Gemini API Interaction Guidelines
+
+For a guide on interacting with the Google Gemini API, follow the instructions in:
+
+@./js_codegen_instructions.md
 
 
