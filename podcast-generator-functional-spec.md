@@ -29,8 +29,6 @@ A user who wants to consume news content in an audio format, tailored to their i
 *   **Playback:** Users shall be able to play the generated audio podcasts directly within the application's UI.
 *   **Download:** Users shall be able to download the generated audio podcast file to their local device.
 
-### 4.4 User Interface
-*   **Hero Image:** The main application page shall display a high quality hero image featuring a robot agent reading the news in a TV studio.
 
 ## 5. Non-Functional Considerations
 *   **Usability:** The UI should be intuitive and easy to navigate, allowing users to effortlessly manage feeds and generate podcasts.
